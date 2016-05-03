@@ -210,3 +210,72 @@ def with_transaction(func):
     return _wrapper
 
             
+def _select(sql,first,*args):
+    global _db_ctx
+    cursor = None
+    sql = sql.replace('?','%s')
+    logging.info('SQL:%s,ARGS:%s' %(sql,args))
+    try:
+        cursor = _db_ctx.connect.coursor()
+        cursor.execute(sql.args)
+        if cursor.description:
+            names = [x[0] for x in cursor.description]
+        if first:
+            values = cursor.fetchone()
+            if not values:
+                return None
+            return Dict(names, values)
+        return[Dict(names, x) for x in cursor.fetchall()]
+    finally:
+        if cursor:
+            cursor.close()
+
+@with_connection
+def select_one(sql, *args):
+    return _select(sql, True, *args)
+
+@with_connection
+def select_int(sql,*args):
+    d = _select(sql,True,*args)
+    if len(d) != 1:
+        raise MultiColumnsError('Except only one column')
+    return d.values()[0]
+
+@with_connection
+def select(sql,*args):
+    return _select(sql,False,*args)
+
+@with_connection
+def _update(sql,*args):
+    global _db_ctx
+    cursor = None
+    sql = sql.replace('?','%s')
+    logging.info('SQL:%s,ARGS:%s' %(sql,args))
+    try:
+        cursor = _db_ctx.connection.cursor()
+        cursor.execute(sql,args)
+        r = cursor.rowcount
+        if _db_ctx.transactions==0:
+            logging.info('auto commit')
+            _db_ctx.connection.commit()
+        return r
+    finally:
+        if cursor:
+            cursor.close()
+
+def insert(table,**kw):
+    cols,args = zip(*kw.iteritems())
+    sql = 'insert into `%s`(%s) value (%s)' % (table,','.join(['`%s`' % col for col in cols]), ','.join(['?' for i in range(len(cols))]))
+    return _update(sql, *args)
+
+def update(sql,*args):
+    return _update(sql,*args)
+
+if __name__ == '__main__':
+    logging.basicConfig(level = logging.DEBUG)
+    create_engine('chenyu','cy78102','test')
+    update('drop table if exists user')
+    update('create table user(id int primary key,name text,email text,passwd text,last_modified real)')
+    import doctest
+    doctest.testmod()
+
