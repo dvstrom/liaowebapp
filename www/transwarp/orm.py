@@ -253,7 +253,7 @@ class Model(dict):
         return cls(**d) if d else None
 
     @classmethod
-    def find_first(cls, where, *args):
+    def find_first(cls, where, *args)   :
         """
         find by where clause and return one result. if multiple results found,
         only the first one return .If no result found,return None
