@@ -2,14 +2,16 @@
 # -*- coding: utf-8 -*-
 __author__ = 'whcy'
 
-'''  
 
+'''  
+DataBase operation module.This module is independent with web module.
 '''
 import time,logging
 import db
 
 class Field(object):
 
+    _count = 0
 
     def __init__(self, **kw):
         "docstring"
@@ -130,7 +132,7 @@ class ModelMetaclass(type):
         """
         skip base Model class:
         """
-        if name == "model":
+        if name == "Model":
             return type.__new__(mcs, name, bases, attrs)
         """
         store all subclasses info
@@ -173,8 +175,8 @@ class ModelMetaclass(type):
             attrs.pop(k)
         if not '__table__' in attrs:
             attrs['__table__'] = name.lower()
-        attrs['__mapping__'] = mappings
-        attrs['__primary_key'] = primary_key
+        attrs['__mappings__'] = mappings
+        attrs['__primary_key__'] = primary_key
         attrs['__sql__']=lambda self:_gen_sql(attrs['__table__'], mappings)
         for trigger in _triggers:
             if not trigger in attrs:
@@ -185,42 +187,42 @@ class Model(dict):
     """
     base class for ORM
 
-    >>>class User(model):
-    ...    id = IntegerField(primary_key=True)
-    ...    name = StringField()
-    ...    email = StringField(updatable=False)
-    ...    passwd = StringField(default=lambda:'******')
-    ...    last_modified = FloatField()
-    ...    def pre_insert(self):
-    ...        self.last_modified = time.time()
+    >>> class testuser(Model):
+    ...     id = IntegerField(primary_key=True)
+    ...     name = StringField()
+    ...     email = StringField(updatable=False)
+    ...     passwd = StringField(default=lambda:'******')
+    ...     last_modified = FloatField()
+    ...     def pre_insert(self):
+    ...         self.last_modified = time.time()
 
-    >>>u = user(id=101090,name='Michael',email="org.org@org.com")
-    >>>r = u.insert()
-    >>>u.email
+    >>> u = testuser(id=101090,name='Michael',email="org.org@org.com")
+    >>> r = u.insert()
+    >>> u.email
     'org.org@org.com
-    >>>u.passwd
+    >>> u.passwd
     '******'
-    >>>u.last_modified>(time.time()-2)
+    >>> u.last_modified>(time.time()-2)
     True
-    >>>f=User.get(101090)
-    >>>f.name
+    >>> f = testuser.get(101090)
+    >>> f.name
     u'Michael'
-    >>>f.email
+    >>> f.email
     u'org.org@org.com'
-    >>>f.email = 'change.org@org.com'
-    >>>f.update() #change email but email is non-updatable
-    >>>len(User.find_all())
+    >>> f.email = 'change.org@org.com'
+    >>> f.update() #change email but email is non-updatable
+    >>> len(testuser.find_all())
     1
-    >>>g = User.get(101090)
-    >>>g.email
+    >>> g = testuser.get(101090)
+    >>> g.email
     u'org.org@org.com'
-    >>>r = g.delete()
-    >>>len(db.select('select * from user where id='101090'))
+    >>> r = g.delete()
+    >>> len(db.select('select * from testuser where id='101090'))
     0
-    >>>import json
-    >>>print User().__sql__()
-    --- generating SQL for user:
-    create table 'user'{
+    >>> import json
+    >>> print testuser().__sql__()
+    --- generating SQL for testuser:
+    create table 'testuser'{
       `id` bigint not null,
       `name` varchar(255) not null,
       `email` varchar(255) not null,
@@ -237,7 +239,7 @@ class Model(dict):
 
     def __getattr__(self, key):
         try:
-            return self(key)
+            return self[key]
         except KeyError:
             raise AttributeError(r"'Dict' object has no attribute '%s'" % key)
         
@@ -267,7 +269,7 @@ class Model(dict):
         """
         find all and return list.
         """
-        L = db.select('select * from `%s`' %cls.__table__)
+        L = db.select('select * from %s' %cls.__table__)
         return[cls(**d) for d in L]
 
     @classmethod
@@ -329,9 +331,9 @@ class Model(dict):
 
 if __name__ == '__main__':
     logging.basicConfig(level = logging.DEBUG)
-    db.create_engine('chenyu','cy78102','test')
-    db.update('drop table if exists user')
-    db.update('create table user (id int primary key,name text,email text,passwd text,last_modified real)')
+    db.create_engine('chenyu', 'cy78102', 'test2')
+    db.update('drop table if exists testuser')
+    db.update('create table testuser (id int primary key,name text,email text,passwd text,last_modified real)')
     import doctest
     doctest.testmod()
 

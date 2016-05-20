@@ -12,26 +12,23 @@ class Dict(dict):
 
     '''
     simple dict but support access as x.y style.
-    >>>d1=Dict()
-    >>>d1['x']=100
-    >>>d1.x
+    >>> d1=Dict()
+    >>> d1['x']=100
+    >>> d1.x
     100
-    >>>d1.y = 200
-    >>>d1.y
+    >>> d1.y = 200
+    >>> d1.y
     200
-    >>>d2=Dict(a=1,b=2,c='3')
-    >>>d2.c
+    >>> d2=Dict(a=1,b=2,c='3')
+    >>> d2.c
     '3'
-    >>>d2.['empty']
-    Traceback(most recent call last):
-    ...
-    AttributeError:'Dict' object has not attribute 'empty'
-    >>>d3 = Dict(('a', 'b', 'c'), (1, 2, 3))
-    >>>d3.a
+    >>> d3 = Dict(('a', 'b', 'c'), (1, 2, 3))
+    >>> d3.a
     1
-    >>>d3.b
+    >>> d3.b
     2
-    >>>d3.c
+    >>> d3.c
+    3
     '''
     def __init__(self, names=(), values=(), **kw):
         super(Dict,self).__init__(**kw)
@@ -40,12 +37,12 @@ class Dict(dict):
 
     def __getattr__(self,key):
         try:
-            return self[k]
+            return self[key]
         except KeyError:
-             raise AttributeError(r"'Dict' object has no attribute '%s'" % key)
+            raise AttributeError(r"'Dict' object has no attribute '%s'" % key)
 
     def __setattr__(self,key,value):
-        self[key]= value
+        self[key] = value
 
 def next_id(t=None):
     '''
@@ -74,68 +71,75 @@ class DBError(Exception):
 class MultiColumnsError(DBError):
     pass
 
-class _lasyConnection(object):
+class _LasyConnection(object):
 
     def __init__(self):
+        print ("beging _lasyconnection __init__")
         self.connection = None
         
     def cursor(self):
+        print ("beging _lasyconnection cursor")
         if self.connection is None:
-            connection = engine.connect()
+            connection = engine.connect()()
             logging.info('open connection <%s>...' %hex(id(connection)))
             self.connection = connection
         return self.connection.cursor()
 
     def commit(self):
+        print ("beging _lasyconnection commit")
         self.connection.commit()
 
     def rollback(self):
+        print ("beging _lasyconnection rollback")
         self.connection.rollback()
 
     def cleanup(self):
+        print ("beging _lasyconnection cleanup")
         if self.connection:
+            logging.info('into _lasyconnection cleanup,this connection <%s>' % hex(id(self.connection)))
             connection = self.connection
             self.connection = None
             logging.info('close connection <%s>...'%hex(id(connection)))
             connection.close()
         
 class _DbCtx(threading.local):
-    '''
-    Thread local object that holds connection info.
+    '''   Thread local object that holds connection info.
     '''
     def __init__(self):
         self.connection = None
-        self.transaction = 0
+        self.transactions = 0
 
     def is_int(self):
         return not self.connection is None
 
     def init(self):
+        logging.info('beging db_ctx init ...')
         self.connection = _LasyConnection()
         self.transaction = 0
 
     def cleanup(self):
+        logging.info('beging db_ctx cleanup ...')
         self.connection.cleanup()
         self.connection = None
 
     def course(self):
         return self.connection.course()
 
-_db_ctx = _DbCtx
+_db_ctx = _DbCtx()
 
         
 engine = None
 class _Engine(object):
 
-    def __init__(self,connect):
+    def __init__(self, connect):
         self._connect = connect
 
     def connect(self):
+        logging.info("in Engine :this engine\'s connect is <%s>" % hex(id(self._connect)))
         return self._connect
 
-
 def create_engine(user,password,database,host="127.0.0.1",port=5432,**kw):
-    import psycopg2
+    import psycopg2 
     global engine
     if engine is not None:
         raise DBError('Engine is already initialized')
@@ -164,6 +168,7 @@ class _ConnectionCtx(object):
             pass
     '''
     def __enter__(self):
+        logging.info('beging ConnectionCtx enter ...')
         global _db_ctx
         self.should_cleanup = False
         if not _db_ctx.is_int():
@@ -172,6 +177,7 @@ class _ConnectionCtx(object):
         return self
 
     def __exit__(self, exctype, excvalue, traceback):
+        logging.info('exit ConnectionCtx ...')
         global _db_ctx
         if self.should_cleanup:
             _db_ctx.cleanup()
@@ -183,10 +189,11 @@ def connection():
 
 def with_connection(func):
     @functools.wraps(func)
-    def _warapper(*args, **kw):
+    def _wrapper(*args, **kw):
+        print "in with_connect decorator"
         with _ConnectionCtx():
             return func(*args, **kw)
-        return _warapper
+    return _wrapper
 
 class _TransactionCtx(object):
 
@@ -240,20 +247,20 @@ def transaction():
         pass
     >>> def update_profile(id, name, rollback):
     ...     u = dict(id=id, name=name, email='%s@test.org' % name, passwd=name, last_modified=time.time())
-    ...     insert('user', **u)
-    ...     r = update('update user set passwd=? where id=?', name.upper(), id)
+    ...     insert('testuser', **u)
+    ...     r = update('update testuser set passwd=? where id=?', name.upper(), id)
     ...     if rollback:
     ...         raise StandardError('will cause rollback...')
     >>> with transaction():
     ...     update_profile(900301, 'Python', False)
-    >>> select_one('select * from user where id=?', 900301).name
+    >>> select_one('select * from testuser where id=?', 900301).name
     u'Python'
     >>> with transaction():
     ...     update_profile(900302, 'Ruby', True)
     Traceback (most recent call last):
       ...
     StandardError: will cause rollback...
-    >>> select('select * from user where id=?', 900302)
+    >>> select('select * from testuser where id=?', 900302)
     []
     '''
     return _TransactionCtx()
@@ -266,22 +273,22 @@ def with_transaction(func):
     >>> @with_transaction
     ... def update_profile(id, name, rollback):
     ...     u = dict(id=id, name=name, email='%s@test.org' % name, passwd=name, last_modified=time.time())
-    ...     insert('user', **u)
-    ...     r = update('update user set passwd=? where id=?', name.upper(), id)
+    ...     insert('testuser', **u)
+    ...     r = update('update testuser set passwd=? where id=?', name.upper(), id)
     ...     if rollback:
     ...         raise StandardError('will cause rollback...')
     >>> update_profile(8080, 'Julia', False)
-    >>> select_one('select * from user where id=?', 8080).passwd
+    >>> select_one('select * from testuser where id=?', 8080).passwd
     u'JULIA'
     >>> update_profile(9090, 'Robert', True)
     Traceback (most recent call last):
       ...
     StandardError: will cause rollback...
-    >>> select('select * from user where id=?', 9090)
+    >>> select('select * from testuser where id=?', 9090)
     []
     '''
     @functools.wraps(func)
-    def _wrapper(*args,**kw):
+    def _wrapper(*args, **kw):
         _start = time.time()
         with _TransactionCtx():
             return func(*args, **kw)
@@ -295,8 +302,8 @@ def _select(sql,first,*args):
     sql = sql.replace('?','%s')
     logging.info('SQL:%s,ARGS:%s' %(sql,args))
     try:
-        cursor = _db_ctx.connect.coursor()
-        cursor.execute(sql.args)
+        cursor = _db_ctx.connection.cursor()
+        cursor.execute(sql, args)
         if cursor.description:
             names = [x[0] for x in cursor.description]
         if first:
@@ -317,15 +324,15 @@ def select_one(sql, *args):
     If multiple results found, the first one returned.
     >>> u1 = dict(id=100, name='Alice', email='alice@test.org', passwd='ABC-12345', last_modified=time.time())
     >>> u2 = dict(id=101, name='Sarah', email='sarah@test.org', passwd='ABC-12345', last_modified=time.time())
-    >>> insert('user', **u1)
+    >>> insert('testuser', **u1)
     1
-    >>> insert('user', **u2)
+    >>> insert('testuser', **u2)
     1
-    >>> u = select_one('select * from user where id=?', 100)
+    >>> u = select_one('select * from testuser where id=?', 100)
     >>> u.name
     u'Alice'
-    >>> select_one('select * from user where email=?', 'abc@email.com')
-    >>> u2 = select_one('select * from user where passwd=? order by email', 'ABC-12345')
+    >>> select_one('select * from testuser where email=?', 'abc@email.com')
+    >>> u2 = select_one('select * from testuser where passwd=? order by email','ABC-12345')
     >>> u2.name
     u'Alice'
     '''
@@ -335,64 +342,65 @@ def select_one(sql, *args):
 def select_int(sql,*args):
     '''
     Execute select SQL and expected one int and only one int result. 
-    >>> n = update('delete from user')
+    >>> n = update('delete from testuser')
     >>> u1 = dict(id=96900, name='Ada', email='ada@test.org', passwd='A-12345', last_modified=time.time())
     >>> u2 = dict(id=96901, name='Adam', email='adam@test.org', passwd='A-12345', last_modified=time.time())
-    >>> insert('user', **u1)
+    >>> insert('testuser', **u1)
     1
-    >>> insert('user', **u2)
+    >>> insert('testuser', **u2)
     1
-    >>> select_int('select count(*) from user')
+    >>> select_int('select count(*) from testuser')
     2
-    >>> select_int('select count(*) from user where email=?', 'ada@test.org')
+    >>> select_int('select count(*) from testuser where email=?', 'ada@test.org')
     1
-    >>> select_int('select count(*) from user where email=?', 'notexist@test.org')
+    >>> select_int('select count(*) from testuser where email=?', 'notexist@test.org')
     0
-    >>> select_int('select id from user where email=?', 'ada@test.org')
+    >>> select_int('select id from testuser where email=?', 'ada@test.org')
     96900
-    >>> select_int('select id, name from user where email=?', 'ada@test.org')
+    >>> select_int('select id, name from testuser where email=?', 'ada@test.org')
     Traceback (most recent call last):
         ...
     MultiColumnsError: Expect only one column.
     '''
-    d = _select(sql,True,*args)
+    d = _select(sql, True, *args)
     if len(d) != 1:
         raise MultiColumnsError('Except only one column')
     return d.values()[0]
 
 @with_connection
-def select(sql,*args):
+def select(sql, *args):
     '''
     Execute select SQL and return list or empty list if no result.
     >>> u1 = dict(id=200, name='Wall.E', email='wall.e@test.org', passwd='back-to-earth', last_modified=time.time())
     >>> u2 = dict(id=201, name='Eva', email='eva@test.org', passwd='back-to-earth', last_modified=time.time())
-    >>> insert('user', **u1)
+    >>> insert('testuser', **u1)
     1
-    >>> insert('user', **u2)
+    >>> insert('testuser', **u2)
     1
-    >>> L = select('select * from user where id=?', 900900900)
+    >>> L = select('select * from testuser where id=?', 900900900)
     >>> L
     []
-    >>> L = select('select * from user where id=?', 200)
+    >>> L = select('select * from testuser where id=?', 200)
     >>> L[0].email
     u'wall.e@test.org'
-    >>> L = select('select * from user where passwd=? order by id desc', 'back-to-earth')
+    >>> L = select('select * from testuser where passwd=? order by id desc', 'back-to-earth')
     >>> L[0].name
     u'Eva'
     >>> L[1].name
     u'Wall.E'
     '''
-    return _select(sql,False,*args)
+    return _select(sql, False, *args)
 
 @with_connection
-def _update(sql,*args):
+def _update(sql, *args):
+    print ("beging execute update")
     global _db_ctx
     cursor = None
-    sql = sql.replace('?','%s')
-    logging.info('SQL:%s,ARGS:%s' %(sql,args))
+    sql = sql.replace('?', '%s')
+    logging.info('SQL:%s,ARGS:%s' % (sql, args))
     try:
         cursor = _db_ctx.connection.cursor()
-        cursor.execute(sql,args)
+        cursor.execute(sql, args)
         r = cursor.rowcount
         if _db_ctx.transactions==0:
             logging.info('auto commit')
@@ -406,48 +414,49 @@ def insert(table,**kw):
     '''
     Execute insert SQL.
     >>> u1 = dict(id=2000, name='Bob', email='bob@test.org', passwd='bobobob', last_modified=time.time())
-    >>> insert('user', **u1)
+    >>> insert('testuser', **u1)
     1
-    >>> u2 = select_one('select * from user where id=?', 2000)
+    >>> u2 = select_one('select * from testuser where id=?', 2000)
     >>> u2.name
     u'Bob'
-    >>> insert('user', **u2)
+    >>> insert('testuser', **u2)
     Traceback (most recent call last):
       ...
     IntegrityError: 1062 (23000): Duplicate entry '2000' for key 'PRIMARY'
     '''
     cols,args = zip(*kw.iteritems())
-    sql = 'insert into `%s`(%s) value (%s)' % (table,','.join(['`%s`' % col for col in cols]), ','.join(['?' for i in range(len(cols))]))
+    sql = 'insert into %s (%s) values (%s);' % (table,','.join(['%s' % col for col in cols]), ','.join(['?' for i in range(len(cols))]))
     return _update(sql, *args)
 
-def update(sql,*args):
+def update(sql, *args):
     '''
     Execute update SQL.
     >>> u1 = dict(id=1000, name='Michael', email='michael@test.org', passwd='123456', last_modified=time.time())
-    >>> insert('user', **u1)
+    >>> insert('testuser', **u1)
     1
-    >>> u2 = select_one('select * from user where id=?', 1000)
+    >>> u2 = select_one('select * from testuser where id=?', 1000)
     >>> u2.email
     u'michael@test.org'
     >>> u2.passwd
     u'123456'
-    >>> update('update user set email=?, passwd=? where id=?', 'michael@example.org', '654321', 1000)
+    >>> update('update testuser set email=?, passwd=? where id=?', 'michael@example.org', '654321', 1000)
     1
-    >>> u3 = select_one('select * from user where id=?', 1000)
+    >>> u3 = select_one('select * from testuser where id=?', 1000)
     >>> u3.email
     u'michael@example.org'
     >>> u3.passwd
     u'654321'
-    >>> update('update user set passwd=? where id=?', '***', '123\' or id=\'456')
+    >>> update('update testuser set passwd=? where id=?', '***', '123\' or id=\'456')
     0
     '''
-    return _update(sql,*args)
+    return _update(sql, *args)
+
 
 if __name__ == '__main__':
     logging.basicConfig(level = logging.DEBUG)
-    create_engine('chenyu','cy78102','test')
-    update('drop table if exists user')
-    update('create table user(id int primary key,name text,email text,passwd text,last_modified real)')
+    create_engine('chenyu','cy78102', 'test2')
+    update('DROP TABLE IF EXISTS testuser;')
+    update("CREATE TABLE testuser(id int PRIMARY KEY,name text,email text,passwd text,last_modified real);")
     import doctest
     doctest.testmod()
 
