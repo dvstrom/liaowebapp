@@ -6,8 +6,8 @@ import time, uuid
 from transwarp.db import next_id
 from transwarp.orm import Model, StringField, FloatField, TextField,BooleanField
 
-class User(Model):
-    __table__ = "users"
+class testuser2(Model):
+    __table__ = "testuser2"
 
     id = StringField(primary_key=True, default=next_id, ddl='varchar(50)')
     email = StringField(updatable=False, ddl='varchar(50)')
@@ -39,3 +39,6 @@ class comment(Model):
     user_image = StringField(ddl='varchar(500)')
     content = TextField()
     create_at = FloatField(updatable=False, default=time.time)
+    
+
+#if __name__ == '__main__':

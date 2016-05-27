@@ -111,17 +111,18 @@ _triggers = frozenset(['pre_insert', 'pre_update', 'pre_delete'])
 
 def _gen_sql(table_name, mappings):
     pk = None
-    sql = ['--generating SQL for %s:' %table_name, 'create talbe `%s`('% table_name]
-    for f in sorted(mappings.values(), lambda x, y: cmp(x.order, y.order)):
+    sql = ['create table %s('% table_name]
+    for f in sorted(mappings.values(), lambda x, y: cmp(x._order, y._order)):
         if not hasattr(f, 'ddl'):
             raise StandardError('no ddl in field "%s".' %f)
         ddl = f.ddl
         nullable = f.nullable
         if f.primary_key:
             pk = f.name
-        sql.append(nullable and '`%s` %s,'% (f.name, ddl) or '`%s` %s not null,' %(f.name, ddl))
-        sql.append(');')
-        return '\n'.join(sql)
+        sql.append(nullable and '%s %s,'% (f.name, ddl) or '%s %s not null,' %(f.name, ddl))
+    sql.append('primary key(%s)'% pk)
+    sql.append(');')
+    return '\n'.join(sql)
 
 class ModelMetaclass(type):
 
@@ -181,7 +182,9 @@ class ModelMetaclass(type):
         for trigger in _triggers:
             if not trigger in attrs:
                 attrs[trigger] = None
-        return type.__new__(mcs,name,bases,attrs)
+        for classfields,value in attrs.iteritems():
+            logging.info('the class attrs %s is %s '%(classfields, value))
+        return type.__new__(mcs, name, bases, attrs)
 
 class Model(dict):
     """
@@ -217,7 +220,7 @@ class Model(dict):
     >>> g.email
     u'org.org@org.com'
     >>> r = g.delete()
-    >>> len(db.select('select * from testuser where id='101090'))
+    >>> len(db.select('select * from testuser where id=101090'))
     0
     >>> import json
     >>> print testuser().__sql__()
@@ -305,17 +308,18 @@ class Model(dict):
                 else:
                     arg = v.default
                     setattr(self, k, arg)
-                L.append('`%s`=?' % k)
-                pk = self.__primary_key__.name
-                args.append(getattr(self,pk))
-                db.update('update `%s` set %s where %s=?' % (self.__table__, ','.join(L), pk), *args)
-                return self
+                L.append('%s =?' % k)
+                args.append(arg)
+        pk = self.__primary_key__.name
+        args.append(getattr(self,pk))
+        db.update('update %s set %s where %s=?' % (self.__table__, ','.join(L), pk), *args)
+        return self
 
     def delete(self):
         self.pre_delete and self.pre_delete()
         pk = self.__primary_key__.name
         args = (getattr(self, pk), )
-        db.update('delete from `%s` where `%s`=?' % (self.__table__, pk), *args)
+        db.update('delete from %s where %s=?' % (self.__table__, pk), *args)
         return self
 
     def insert(self):
